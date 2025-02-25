@@ -67,7 +67,7 @@ async function main() {
     };
 
     const amount = 100000.80618017282;
-    const fee = "0.0017661857495432799"";
+    const fee = "0.0017661857495432799";
 
     while (true) {
         // Validasi lock
