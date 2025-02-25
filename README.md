@@ -1,5 +1,7 @@
 This Is Bot for auto Lock and Unlock for Liqfinity
 
+THIS SC WORK ON UNIX , TERMUX ? IDK
+
 Register  https://app.testnet.liqfinity.com/invite/U171120
 
 install 
@@ -16,4 +18,6 @@ input your berier token in "token.txt"
 Run bot
 
     node bot 
+
+
 
