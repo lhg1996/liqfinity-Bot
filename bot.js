@@ -21,10 +21,19 @@ async function makeRequest(url, method, headers = {}, data = {}) {
         });
     });
 
-    await page.goto(url, { waitUntil: 'networkidle2' });
-    const response = await page.evaluate(() => document.body.innerText);
-    await browser.close();
-    return response;
+    try {
+        // Navigasi ke URL dengan timeout 60 detik dan menunggu hingga jaringan idle
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+        // Ambil respons dari halaman
+        const response = await page.evaluate(() => document.body.innerText);
+        await browser.close();
+        return response;
+    } catch (error) {
+        console.error(chalk.red('Navigation timeout or error:'), error);
+        await browser.close();
+        return null;
+    }
 }
 
 // Fungsi untuk menunggu beberapa detik
@@ -37,7 +46,7 @@ async function fetchPoints(headers) {
     const pointsUrl = 'https://api.testnet.liqfinity.com/v1/user/points';
     console.log(chalk.blue('Fetching points...'));
     const pointsResponse = await makeRequest(pointsUrl, 'GET', headers);
-    
+
     try {
         const pointsData = JSON.parse(pointsResponse);
         if (pointsData.success && pointsData.data && pointsData.data.points) {
@@ -83,7 +92,7 @@ async function main() {
         const validateLockResponse = await makeRequest(validateLockUrl, 'POST', headers, validateLockBody);
         console.log('Validate Lock Response:', validateLockResponse);
         await fetchPoints(headers);
-        await delay(3000);
+        await delay(30000); // 
 
         // Create lock
         console.log(chalk.blue('Creating lock...'));
@@ -92,7 +101,7 @@ async function main() {
         const createLockResponse = await makeRequest(createLockUrl, 'POST', headers, createLockBody);
         console.log('Create Lock Response:', createLockResponse);
         await fetchPoints(headers);
-        await delay(3000);
+        await delay(30000); // 
 
         // Validasi unlock
         console.log(chalk.blue('Validating unlock...'));
@@ -101,7 +110,7 @@ async function main() {
         const validateUnlockResponse = await makeRequest(validateUnlockUrl, 'POST', headers, validateUnlockBody);
         console.log('Validate Unlock Response:', validateUnlockResponse);
         await fetchPoints(headers);
-        await delay(3000);
+        await delay(30000); // 
 
         // Create unlock
         console.log(chalk.blue('Creating unlock...'));
@@ -110,7 +119,7 @@ async function main() {
         const createUnlockResponse = await makeRequest(createUnlockUrl, 'POST', headers, createUnlockBody);
         console.log('Create Unlock Response:', createUnlockResponse);
         await fetchPoints(headers);
-        await delay(3000);
+        await delay(30000); // 
     }
 }
 
