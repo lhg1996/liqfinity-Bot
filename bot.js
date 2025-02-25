@@ -1,5 +1,6 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
+const chalk = require('chalk');
 
 // Fungsi untuk membaca token dari file
 function readToken() {
@@ -20,10 +21,19 @@ async function makeRequest(url, method, headers = {}, data = {}) {
         });
     });
 
-    await page.goto(url, { waitUntil: 'networkidle2' });
-    const response = await page.evaluate(() => document.body.innerText);
-    await browser.close();
-    return response;
+    try {
+        // Navigasi ke URL dengan timeout 60 detik dan menunggu hingga jaringan idle
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+        // Ambil respons dari halaman
+        const response = await page.evaluate(() => document.body.innerText);
+        await browser.close();
+        return response;
+    } catch (error) {
+        console.error(chalk.red('Navigation timeout or error:'), error);
+        await browser.close();
+        return null;
+    }
 }
 
 // Fungsi untuk menunggu beberapa detik
@@ -34,19 +44,24 @@ function delay(ms) {
 // Fungsi untuk mengambil dan menampilkan poin dalam format rapi
 async function fetchPoints(headers) {
     const pointsUrl = 'https://api.testnet.liqfinity.com/v1/user/points';
-    console.log('Fetching points...');
+    console.log(chalk.blue('Fetching points...'));
     const pointsResponse = await makeRequest(pointsUrl, 'GET', headers);
-    
+
     try {
         const pointsData = JSON.parse(pointsResponse);
         if (pointsData.success && pointsData.data && pointsData.data.points) {
             const points = pointsData.data.points;
-            console.log(`Points\nBorrow Points: ${points.borrowPoints}\nLiquidity Points: ${points.liquidityPoints}\nRank: ${points.rank}\nReferral Points: ${points.referralPoints}\nSum Points: ${points.sumPoints}`);
+            console.log(chalk.green(`\nPoints`));
+            console.log(chalk.green(`Borrow Points: ${points.borrowPoints}`));
+            console.log(chalk.green(`Liquidity Points: ${points.liquidityPoints}`));
+            console.log(chalk.green(`Rank: ${points.rank}`));
+            console.log(chalk.green(`Referral Points: ${points.referralPoints}`));
+            console.log(chalk.green(`Sum Points: ${points.sumPoints}\n`));
         } else {
-            console.log('Invalid points response format');
+            console.log(chalk.red('Invalid points response format'));
         }
     } catch (error) {
-        console.log('Error parsing points response:', error);
+        console.log(chalk.red('Error parsing points response:'), error);
     }
 }
 
@@ -71,43 +86,42 @@ async function main() {
 
     while (true) {
         // Validasi lock
-        console.log('Validating lock...');
+        console.log(chalk.blue('Validating lock...'));
         const validateLockUrl = 'https://api.testnet.liqfinity.com/v1/user/stakes/USDT/stake/validate';
         const validateLockBody = { amount: amount };
         const validateLockResponse = await makeRequest(validateLockUrl, 'POST', headers, validateLockBody);
         console.log('Validate Lock Response:', validateLockResponse);
         await fetchPoints(headers);
-        await delay(30000);
+        await delay(30000); // 
 
         // Create lock
-        console.log('Creating lock...');
+        console.log(chalk.blue('Creating lock...'));
         const createLockUrl = 'https://api.testnet.liqfinity.com/v1/user/stakes/USDT/stake/create';
         const createLockBody = { amount: amount.toString(), fee: fee };
         const createLockResponse = await makeRequest(createLockUrl, 'POST', headers, createLockBody);
         console.log('Create Lock Response:', createLockResponse);
         await fetchPoints(headers);
-        await delay(30000);
+        await delay(30000); // 
 
         // Validasi unlock
-        console.log('Validating unlock...');
+        console.log(chalk.blue('Validating unlock...'));
         const validateUnlockUrl = 'https://api.testnet.liqfinity.com/v1/user/stakes/USDT/liquidation/validate';
         const validateUnlockBody = { amount: amount };
         const validateUnlockResponse = await makeRequest(validateUnlockUrl, 'POST', headers, validateUnlockBody);
         console.log('Validate Unlock Response:', validateUnlockResponse);
         await fetchPoints(headers);
-        await delay(30000);
+        await delay(30000); // 
 
         // Create unlock
-        console.log('Creating unlock...');
+        console.log(chalk.blue('Creating unlock...'));
         const createUnlockUrl = 'https://api.testnet.liqfinity.com/v1/user/stakes/USDT/liquidation/create';
         const createUnlockBody = { amount: amount.toString(), fee: fee };
         const createUnlockResponse = await makeRequest(createUnlockUrl, 'POST', headers, createUnlockBody);
         console.log('Create Unlock Response:', createUnlockResponse);
         await fetchPoints(headers);
-        await delay(30000);
+        await delay(30000); // 
     }
 }
 
 // Jalankan fungsi utama
 main();
-
