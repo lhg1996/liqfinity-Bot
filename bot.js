@@ -21,19 +21,10 @@ async function makeRequest(url, method, headers = {}, data = {}) {
         });
     });
 
-    try {
-        // Navigasi ke URL dengan timeout 60 detik dan menunggu hingga jaringan idle
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-
-        // Ambil respons dari halaman
-        const response = await page.evaluate(() => document.body.innerText);
-        await browser.close();
-        return response;
-    } catch (error) {
-        console.error(chalk.red('Navigation timeout or error:'), error);
-        await browser.close();
-        return null;
-    }
+    await page.goto(url, { waitUntil: 'networkidle2' });
+    const response = await page.evaluate(() => document.body.innerText);
+    await browser.close();
+    return response;
 }
 
 // Fungsi untuk menunggu beberapa detik
@@ -46,7 +37,7 @@ async function fetchPoints(headers) {
     const pointsUrl = 'https://api.testnet.liqfinity.com/v1/user/points';
     console.log(chalk.blue('Fetching points...'));
     const pointsResponse = await makeRequest(pointsUrl, 'GET', headers);
-
+    
     try {
         const pointsData = JSON.parse(pointsResponse);
         if (pointsData.success && pointsData.data && pointsData.data.points) {
@@ -85,32 +76,31 @@ async function main() {
     const fee = "0.0017661857495432799";
 
     while (true) {
-        // Validasi lock
-        console.log(chalk.blue('Validating lock...'));
-        const validateLockUrl = 'https://api.testnet.liqfinity.com/v1/user/stakes/USDT/stake/validate';
-        const validateLockBody = { amount: amount };
-        const validateLockResponse = await makeRequest(validateLockUrl, 'POST', headers, validateLockBody);
-        console.log('Validate Lock Response:', validateLockResponse);
-        await fetchPoints(headers);
-        await delay(30000); // 
-
         // Create lock
         console.log(chalk.blue('Creating lock...'));
         const createLockUrl = 'https://api.testnet.liqfinity.com/v1/user/stakes/USDT/stake/create';
         const createLockBody = { amount: amount.toString(), fee: fee };
         const createLockResponse = await makeRequest(createLockUrl, 'POST', headers, createLockBody);
         console.log('Create Lock Response:', createLockResponse);
-        await fetchPoints(headers);
-        await delay(30000); // 
 
-        // Validasi unlock
-        console.log(chalk.blue('Validating unlock...'));
-        const validateUnlockUrl = 'https://api.testnet.liqfinity.com/v1/user/stakes/USDT/liquidation/validate';
-        const validateUnlockBody = { amount: amount };
-        const validateUnlockResponse = await makeRequest(validateUnlockUrl, 'POST', headers, validateUnlockBody);
-        console.log('Validate Unlock Response:', validateUnlockResponse);
+        // Cek jika respons menunjukkan saldo tidak mencukupi
+        try {
+            const createLockData = JSON.parse(createLockResponse);
+            if (!createLockData.success && createLockData.message === "Insufficient balance") {
+                console.log(chalk.yellow('Insufficient balance, skipping to next step...'));
+                await fetchPoints(headers);
+                await delay(3000);
+                continue; // Lanjut ke iterasi berikutnya tanpa melakukan unlock
+            }
+        } catch (error) {
+            console.log(chalk.red('Error parsing create lock response:'), error);
+        }
+
         await fetchPoints(headers);
-        await delay(30000); // 
+
+        // Tunggu 30 detik sebelum create unlock
+        console.log(chalk.blue('Waiting 30 seconds before creating unlock...'));
+        await delay(30000);
 
         // Create unlock
         console.log(chalk.blue('Creating unlock...'));
@@ -118,8 +108,12 @@ async function main() {
         const createUnlockBody = { amount: amount.toString(), fee: fee };
         const createUnlockResponse = await makeRequest(createUnlockUrl, 'POST', headers, createUnlockBody);
         console.log('Create Unlock Response:', createUnlockResponse);
+
         await fetchPoints(headers);
-        await delay(30000); // 
+
+        // Tunggu 30 detik sebelum kembali ke create lock
+        console.log(chalk.blue('Waiting 30 seconds before creating lock again...'));
+        await delay(30000);
     }
 }
 
