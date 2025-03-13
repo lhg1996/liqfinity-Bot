@@ -2,14 +2,17 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const chalk = require('chalk');
 
-// Fungsi untuk membaca token dari file
+// 读取 token
 function readToken() {
     return fs.readFileSync('token.txt', 'utf8').trim();
 }
 
-// Fungsi untuk melakukan request API menggunakan Puppeteer
+// 使用 Puppeteer 发送 API 请求
 async function makeRequest(url, method, headers = {}, data = {}) {
-    const browser = await puppeteer.launch({ headless: "new" });
+    const browser = await puppeteer.launch({ 
+        headless: "new", 
+        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+    });
     const page = await browser.newPage();
 
     await page.setRequestInterception(true);
@@ -21,23 +24,35 @@ async function makeRequest(url, method, headers = {}, data = {}) {
         });
     });
 
-    await page.goto(url, { waitUntil: 'networkidle2' });
+    try {
+        await page.goto(url, { timeout: 30000, waitUntil: 'networkidle2' });
+    } catch (error) {
+        console.error(chalk.red('页面加载超时，继续执行其他任务'));
+        await browser.close();
+        return null;
+    }
+
     const response = await page.evaluate(() => document.body.innerText);
     await browser.close();
     return response;
 }
 
-// Fungsi untuk menunggu beberapa detik
+// 延迟函数
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Fungsi untuk mengambil dan menampilkan poin dalam format rapi
+// 获取用户积分
 async function fetchPoints(headers) {
     const pointsUrl = 'https://api.testnet.liqfinity.com/v1/user/points';
     console.log(chalk.blue('Fetching points...'));
-    const pointsResponse = await makeRequest(pointsUrl, 'GET', headers);
     
+    const pointsResponse = await makeRequest(pointsUrl, 'GET', headers);
+    if (!pointsResponse) {
+        console.log(chalk.red('获取积分失败，跳过此次请求'));
+        return;
+    }
+
     try {
         const pointsData = JSON.parse(pointsResponse);
         if (pointsData.success && pointsData.data && pointsData.data.points) {
@@ -49,14 +64,14 @@ async function fetchPoints(headers) {
             console.log(chalk.green(`Referral Points: ${points.referralPoints}`));
             console.log(chalk.green(`Sum Points: ${points.sumPoints}\n`));
         } else {
-            console.log(chalk.red('Invalid points response format'));
+            console.log(chalk.red('积分数据格式错误'));
         }
     } catch (error) {
-        console.log(chalk.red('Error parsing points response:'), error);
+        console.log(chalk.red('解析积分数据出错:'), error);
     }
 }
 
-// Fungsi utama
+// 主函数
 async function main() {
     const token = readToken();
     const headers = {
@@ -72,50 +87,53 @@ async function main() {
         'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7'
     };
 
-    const amount = 100000.80618017282;
+    const amount = 100000;
     const fee = "0.0017661857495432799";
 
     while (true) {
-        // Create lock
         console.log(chalk.blue('Creating lock...'));
         const createLockUrl = 'https://api.testnet.liqfinity.com/v1/user/stakes/USDT/stake/create';
         const createLockBody = { amount: amount.toString(), fee: fee };
         const createLockResponse = await makeRequest(createLockUrl, 'POST', headers, createLockBody);
-        console.log('Create Lock Response:', createLockResponse);
+        
+        if (!createLockResponse) {
+            console.log(chalk.red('创建锁定失败，跳过本次循环'));
+            await delay(3000);
+            continue;
+        }
 
-        // Cek jika respons menunjukkan saldo tidak mencukupi
         try {
             const createLockData = JSON.parse(createLockResponse);
             if (!createLockData.success && createLockData.message === "Insufficient balance") {
-                console.log(chalk.yellow('Insufficient balance, skipping to next step...'));
+                console.log(chalk.yellow('余额不足，跳过到下一步...'));
                 await fetchPoints(headers);
                 await delay(3000);
-                continue; // Lanjut ke iterasi berikutnya tanpa melakukan unlock
+                continue;
             }
         } catch (error) {
-            console.log(chalk.red('Error parsing create lock response:'), error);
+            console.log(chalk.red('解析锁定创建响应出错:'), error);
         }
 
         await fetchPoints(headers);
-
-        // Tunggu 30 detik sebelum create unlock
         console.log(chalk.blue('Waiting 30 seconds before creating unlock...'));
-        await delay(30000);
+        await delay(40000);
 
-        // Create unlock
         console.log(chalk.blue('Creating unlock...'));
         const createUnlockUrl = 'https://api.testnet.liqfinity.com/v1/user/stakes/USDT/liquidation/create';
         const createUnlockBody = { amount: amount.toString(), fee: fee };
         const createUnlockResponse = await makeRequest(createUnlockUrl, 'POST', headers, createUnlockBody);
-        console.log('Create Unlock Response:', createUnlockResponse);
+
+        if (!createUnlockResponse) {
+            console.log(chalk.red('创建解锁失败，跳过本次循环'));
+            await delay(3000);
+            continue;
+        }
 
         await fetchPoints(headers);
-
-        // Tunggu 30 detik sebelum kembali ke create lock
         console.log(chalk.blue('Waiting 30 seconds before creating lock again...'));
-        await delay(30000);
+        await delay(40000);
     }
 }
 
-// Jalankan fungsi utama
+// 运行主函数
 main();
